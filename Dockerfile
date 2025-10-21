@@ -1,15 +1,17 @@
-FROM python:3.10-slim
+# ---- Dockerfile ----
+FROM python:3.9-slim
 
+# Set working directory inside container
 WORKDIR /app
 
+# Copy project files into container
+COPY . .
 
-COPY  . /app
+# Install dependencies (if you have a requirements.txt)
+RUN pip install --no-cache-dir -r requirements.txt || true
 
+# Expose the app port
+EXPOSE 8080
 
-RUN pip install --no-cache-dir -r requirements.txt
-
-
-EXPOSE 500
-
-
-CMD["python3","app.py"]
+# Run your app (modify this if needed)
+CMD ["python", "app.py"]
