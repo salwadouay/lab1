@@ -4,41 +4,42 @@
 APP_NAME="myapp"
 DOCKER_IMAGE="myapp_image"
 DOCKER_TAG="latest"
-WATCH_DIR="./"  # directory to monitor (e.g., your app folder)
-PORT=8080        # exposed container port
+PORT=8080
+GIT_REPO_DIR="/path/to/your/local/repo"  # full path to your project folder
+BRANCH="main"                            # branch to watch
+CHECK_INTERVAL=30                        # seconds between checks
+
+cd "$GIT_REPO_DIR" || { echo "❌ Repo not found: $GIT_REPO_DIR"; exit 1; }
 
 # === FUNCTION TO DEPLOY ===
 deploy_container() {
-    echo "🚀 Rebuilding Docker image..."
+    echo "🚀 New commit detected! Deploying..."
     docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
 
-    echo "🧹 Stopping and removing old container (if exists)..."
+    echo "🧹 Stopping and removing old container..."
     docker stop ${APP_NAME} >/dev/null 2>&1
     docker rm ${APP_NAME} >/dev/null 2>&1
 
     echo "🆕 Starting new container..."
     docker run -d --name ${APP_NAME} -p ${PORT}:${PORT} ${DOCKER_IMAGE}:${DOCKER_TAG}
-
-    echo "✅ Deployment complete! Container '${APP_NAME}' is running on port ${PORT}."
+    echo "✅ Deployment complete!"
 }
 
-# === MONITOR FILE CHANGES ===
-echo "👀 Watching for changes in '${WATCH_DIR}'..."
-echo "Press [CTRL+C] to stop."
+# === MAIN LOOP ===
+echo "👀 Monitoring branch '$BRANCH' for new commits..."
+LAST_COMMIT=$(git rev-parse $BRANCH)
 
-# Make sure inotifywait is installed
-if ! command -v inotifywait &> /dev/null; then
-    echo "❌ Error: inotify-tools is not installed."
-    echo "Install it with: sudo apt install inotify-tools"
-    exit 1
-fi
-
-# Initial build
-deploy_container
-
-# Watch for file changes
 while true; do
-    inotifywait -r -e modify,create,delete,move ${WATCH_DIR}
-    echo "🔄 Change detected! Redeploying..."
-    deploy_container
+    git fetch origin $BRANCH >/dev/null 2>&1
+    NEW_COMMIT=$(git rev-parse origin/$BRANCH)
+
+    if [ "$NEW_COMMIT" != "$LAST_COMMIT" ]; then
+        echo "🔄 New commit detected: $NEW_COMMIT"
+        git pull origin $BRANCH
+        deploy_container
+        LAST_COMMIT=$NEW_COMMIT
+    fi
+
+    sleep $CHECK_INTERVAL
 done
+
